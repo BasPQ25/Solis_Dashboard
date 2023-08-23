@@ -50,3 +50,13 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+# Build folders
+[Dd]ebug/
+[Rr]elease/
+
+# Settings
+.metadata/
+.settings/
+*.launch
+
