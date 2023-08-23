@@ -64,10 +64,10 @@ void updateAvgPower(I2C_HandleTypeDef *handle, int avgpow) {
 	HD44780_Display();
 }
 
-void updateInstPower(I2C_HandleTypeDef *handle, int instpow) {
-	HD44780_SetCursor(17, 2);
+void updateInstPower(I2C_HandleTypeDef *handle, float instpow) {
+	HD44780_SetCursor(16, 2);
 	char str[5];
-	snprintf(str, sizeof(str), "%d", (int) instpow);
+	snprintf(str, sizeof(str), "%4.0f", (float) instpow);
 	HD44780_PrintStr(str);
 	HD44780_Display();
 }

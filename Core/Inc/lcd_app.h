@@ -20,7 +20,7 @@ void updateLowVoltage(I2C_HandleTypeDef*, float);//
 void updateSpeed(I2C_HandleTypeDef*, float);//
 void updateSOC(I2C_HandleTypeDef*, uint8_t);//
 void updateAvgPower(I2C_HandleTypeDef*, int);//
-void updateInstPower(I2C_HandleTypeDef*, int);
+void updateInstPower(I2C_HandleTypeDef*, float);
 void updateMessage(char* message);
 void SetUpDisplay(I2C_HandleTypeDef*);//
 

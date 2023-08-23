@@ -124,6 +124,11 @@ static uint32_t mot_spd = 0;
 static const float *p_veh_spd = (float*) &veh_spd;
 static const float *p_mot_spd = (float*) &mot_spd;
 
+static uint32_t bus_current = 0;
+static uint32_t bus_voltage = 0;
+static const float *p_bus_current = (float*) &bus_current;
+static const float *p_bus_voltage = (float*) &bus_voltage;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -142,8 +147,6 @@ static void MX_TIM4_Init(void);
 /* USER CODE BEGIN 0 */
 
 void CAN_Transmit(uint32_t id, uint8_t *data, uint8_t len) {
-	/*uint32_t mailbox;
-	 CAN_TxHeaderTypeDef txHeader;*/
 
 	txHeader.StdId = id;
 	txHeader.ExtId = 0x00;
@@ -162,17 +165,21 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
 	HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &RxHeader, RxData);
 	uint32_t canID = RxHeader.StdId;
 	switch (canID) {
-	// Pack total voltage
+	// Inverter DC Bus Voltage & Current
+	case 0x402:
+		bus_current = ((uint32_t) RxData[7] << 24) + ((uint32_t) RxData[6] << 16)
+				+ ((uint32_t) RxData[5] << 8) + ((uint32_t) RxData[4]);
+
+		bus_voltage = ((uint32_t) RxData[3] << 24) + ((uint32_t) RxData[2] << 16)
+				+ ((uint32_t) RxData[1] << 8) + ((uint32_t) RxData[0]);
+		break;
+	// Speed
 	case 0x403:
 		veh_spd = ((uint32_t) RxData[7] << 24) + ((uint32_t) RxData[6] << 16)
 				+ ((uint32_t) RxData[5] << 8) + ((uint32_t) RxData[4]);
 
 		mot_spd = ((uint32_t) RxData[3] << 24) + ((uint32_t) RxData[2] << 16)
 				+ ((uint32_t) RxData[1] << 8) + ((uint32_t) RxData[0]);
-		break;
-		// Temperatures
-	case 0x18B428F4: //Electric cart temps id
-		//countCANf++;
 		break;
 	}
 }
@@ -256,7 +263,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 				rpm_ref = -2000;
 			}
 
-		} else // if (power_on==0)
+		}
+		else // if (power_on==0)
 		{
 			current_ref = 0;
 		}
@@ -384,7 +392,7 @@ int main(void)
 		updateSpeed(&hi2c1, *p_veh_spd);
 		updateSOC(&hi2c1, soc);
 		updateAvgPower(&hi2c1, avgpow);
-		updateInstPower(&hi2c1, instpow);
+		updateInstPower(&hi2c1, (*p_bus_current)*(*p_bus_voltage));
 		updateMessage((char*) &msg);
 	}
   /* USER CODE END 3 */
