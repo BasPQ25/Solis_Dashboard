@@ -54,6 +54,7 @@ dkms.conf
 # Build folders
 [Dd]ebug/
 [Rr]elease/
+[Dd]rivers/
 
 # Settings
 .metadata/

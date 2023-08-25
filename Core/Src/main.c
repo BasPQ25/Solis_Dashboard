@@ -196,7 +196,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 		cam = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_8);
 		tail = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_14)
 				|| HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_13);
-		horn = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_3);
+		//horn = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_3);
+		horn = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1);
 		breakl = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1); //check pedal !!!!!!!
 		fan = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_4);
 		blink_r = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_5);
@@ -692,10 +693,10 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PA4 PA7 PA8 PA9
-                           PA10 PA13 */
-  GPIO_InitStruct.Pin = GPIO_PIN_4|GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_9
-                          |GPIO_PIN_10|GPIO_PIN_13;
+  /*Configure GPIO pins : PA1 PA4 PA7 PA8
+                           PA9 PA10 PA13 */
+  GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_4|GPIO_PIN_7|GPIO_PIN_8
+                          |GPIO_PIN_9|GPIO_PIN_10|GPIO_PIN_13;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
