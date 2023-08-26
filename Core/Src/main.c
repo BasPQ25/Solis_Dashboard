@@ -287,9 +287,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 
 		CAN_Transmit(0x501, message, 8);
 	}
-	//1sec
+	//500 msec
 	if (htim == &htim4) {
-		//1 sec is better for the cruise_on becouse of the debouncing.
+		//500 msec is better for the cruise_on becouse of the debouncing.
 		cruise_button_state = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_9);
 		if (cruise_button_state == 1) {
 			cruise_speed = *p_mot_spd;
