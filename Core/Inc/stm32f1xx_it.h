@@ -27,7 +27,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "buttons.h"
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
@@ -59,7 +59,9 @@ void USB_LP_CAN1_RX0_IRQHandler(void);
 void TIM3_IRQHandler(void);
 void TIM4_IRQHandler(void);
 /* USER CODE BEGIN EFP */
-
+void toggle_state(button*, uint16_t, uint8_t);
+void impulse_state(button*, uint16_t, uint8_t);
+void push_state(button*, uint16_t, uint8_t);
 /* USER CODE END EFP */
 
 #ifdef __cplusplus

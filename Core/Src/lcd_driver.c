@@ -24,7 +24,7 @@ uint8_t special2[8] = { 0b11000, 0b11000, 0b00110, 0b01001, 0b01000, 0b01001,
 void HD44780_Init(uint8_t rows) {
 	dpRows = rows;
 
-	dpBacklight = LCD_BACKLIGHT;
+	dpBacklight = LCD_NOBACKLIGHT;
 
 	dpFunction = LCD_4BITMODE | LCD_1LINE | LCD_5x8DOTS;
 

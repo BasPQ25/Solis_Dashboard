@@ -21,24 +21,27 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "lcd_app.h"
 #include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+enum State bms_state = IDLE;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define MIN(a, b) ((a) < (b)) ? (a) : (b)
-#define MAX(a, b) ((a) > (b)) ? (a) : (b)
+#define CRUISE_CONTROL_MAX_SPEED 800.0f
+#define CRUISE_CONTROL_MIN_SPEED 100.0f
+#define PEDAL_MIN 200
+#define PEDAL_MAX 3530
+//#define PEDAL_MAX 2630
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-
+#define MIN(a, b) ((a) < (b)) ? (a) : (b)
+#define MAX(a, b) ((a) > (b)) ? (a) : (b)
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -52,82 +55,69 @@ TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
 
 /* USER CODE BEGIN PV */
+// Buttons' state
+state but_state = { 0 };
 
-//Dash Display
-float tempmin = 29.3;
-float tempmax = 29.4;
-uint8_t spd = 120;
-uint8_t soc = 100;
-int avgpow = 2300;
-int instpow = 830;
-float highvol = 3.65;
-float lowvol = 3.62;
-char msg[20];
-
-//CAN
-uint32_t mailbox;
-CAN_TxHeaderTypeDef txHeader;
-CAN_RxHeaderTypeDef RxHeader;
-
-uint8_t RxData[8];
-uint8_t data[12];
-uint16_t countCAN = 0;
-uint16_t countCANf = 0;
-
-uint8_t RxData[8];
-uint8_t data[12];
-
-//ADC
-uint16_t adcValue = 0;
-
-//Auxiliary variables
-uint32_t auxID = 0x123;
-uint8_t Aux_State = 0b00000000;
-uint8_t head = 0;
-uint8_t cam = 0;
-uint8_t tail = 0;
-uint8_t horn = 0;
-uint8_t breakl = 0; //PB1
-uint8_t fan = 0;
-uint8_t blink_r = 0;
-uint8_t blink_l = 0;
-
-uint8_t head_tail = 0;
-
-uint8_t count = 0;
-
-//Inverter  ++some frame templates
-uint8_t power_on = 0; //Run on inv PA10
-uint8_t speed = 0; //??uint??
-uint8_t forward = 0;  //???uint
-uint8_t reverse = 0;  //???uint
-uint8_t brake_swap = 0; //ok.
-
-//Internal dash variables
-uint8_t next = 0;
-uint8_t cruise_up = 0;
-uint8_t cruise_down = 0;
-uint8_t cruise_button_state = 0;
-uint8_t cruise_on = 0;
-uint32_t cruise_speed = 0;
-uint8_t pedal_count = 0;
-uint16_t regen_acc_pedal_adc = 0;
-uint8_t mech_brake_pedal_state = 0;
-
-float current_ref = 0.00f;
-float rpm_ref = 0.00f;
-uint8_t message[8] = { 0 };
+// CAN outputs
+static uint8_t bms_data[8] = { 0 };
+static uint8_t inv_data[8] = { 0 };
+uint8_t* const p_bms_data = bms_data;
+uint8_t* const p_inv_data = inv_data;
+uint8_t* const p_aux_data = &but_state.aux_state;
 
 //Dashboard
-static uint32_t veh_spd = 0;
-static uint32_t mot_spd = 0;
-static const float *p_veh_spd = (float*) &veh_spd;
-static const float *p_mot_spd = (float*) &mot_spd;
-
 static uint32_t bus_current = 0;
+float* const p_bus_current = (float*) &bus_current;
+
 static uint32_t bus_voltage = 0;
-static const float *p_bus_current = (float*) &bus_current;
-static const float *p_bus_voltage = (float*) &bus_voltage;
+float* const p_bus_voltage = (float*) &bus_voltage;
+
+static int32_t bat_current = 0;
+int32_t* const p_bat_current = &bat_current;
+
+static uint32_t bat_voltage = 0;
+uint32_t* const p_bat_voltage = &bat_voltage;
+
+static int16_t mppt1_current = 0;
+int16_t* const p_mppt1_current = &mppt1_current;
+
+static int16_t mppt1_voltage = 0;
+int16_t* const p_mppt1_voltage = &mppt1_voltage;
+
+static int16_t mppt2_current = 0;
+int16_t* const p_mppt2_current = &mppt2_current;
+
+static int16_t mppt2_voltage = 0;
+int16_t* const p_mppt2_voltage = &mppt2_voltage;
+
+static uint32_t veh_spd = 0;
+float* const p_veh_spd = (float*) &veh_spd;
+
+static uint32_t mot_spd = 0;
+float* const p_mot_spd = (float*) &mot_spd;
+
+static uint32_t tmp_min = 0;
+float* const p_tmp_min = (float*) &tmp_min;
+
+static uint32_t tmp_max = 0;
+float* const p_tmp_max = (float*) &tmp_max;
+
+static uint32_t vol_min = 0;
+float* const p_vol_min = (float*) &vol_min;
+
+static uint32_t vol_max = 0;
+float* const p_vol_max = (float*) &vol_max;
+
+static uint32_t cur_ref = 0;
+float* const p_cur_ref = (float*) &cur_ref;
+
+static uint32_t charge = 0;
+float* const p_charge = (float*) &charge;
+
+static uint32_t crs_spd = 0;
+float* const p_crs_spd = (float*) &crs_spd;
+
+uint32_t pedal_delay = 0;
 
 /* USER CODE END PV */
 
@@ -140,180 +130,56 @@ static void MX_TIM3_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_TIM4_Init(void);
 /* USER CODE BEGIN PFP */
+void set_invertor_state()
+{
+	bms_data[0] = (mot_spd) & 0xFF;
+	bms_data[1] = (mot_spd >> 8) & 0xFF;
+	bms_data[2] = (mot_spd >> 16) & 0xFF;
+	bms_data[3] = (mot_spd >> 24) & 0xFF;
 
+	bms_data[4] = (cur_ref) & 0xFF;
+	bms_data[5] = (cur_ref >> 8) & 0xFF;
+	bms_data[6] = (cur_ref >> 16) & 0xFF;
+	bms_data[7] = (cur_ref >> 24) & 0xFF;
+}
+void update_display(I2C_HandleTypeDef *hi2c1, char *msg)
+{
+	if (!hi2c1)
+		return;
+	// If dashboard is disconnected
+	if (HAL_I2C_IsDeviceReady(hi2c1, DEVICE_ADDR, 2, 10) != HAL_OK)
+		return;
+
+	char buffer[21];
+	float mppt_pow = ((float)((float)mppt1_current + (float)mppt2_current) * (float)mppt1_voltage) / 100.0F;
+	float bat_pow = ((float)bat_current * (float)bat_voltage) / 1000000.0F;
+	float bus_pow = ((float)bus_current * (float)bus_voltage) / 1000.0F;
+
+	// Display first row
+	HD44780_SetCursor(0, 0);
+	sprintf(buffer, "%4.1f |V: %4.0f | %4.2f", *p_tmp_min, (*p_veh_spd) * 3.6, *p_vol_min);
+	HD44780_PrintStr(buffer);
+
+	// Display second row
+	HD44780_SetCursor(0, 1);
+	sprintf(buffer, "%4.1f |%%: %4.0f | %4.2f", *p_tmp_max, (*p_charge) * 100.f, *p_vol_max);
+	HD44780_PrintStr(buffer);
+
+	// Display third row
+	HD44780_SetCursor(0, 2);
+	sprintf(buffer, "%4.2f |   %4.2f | %4.2f", mppt_pow, bat_pow, bus_pow);
+	HD44780_PrintStr(buffer);
+
+	// Display message
+	HD44780_SetCursor(0, 3);
+	HD44780_PrintStr(msg);
+
+	HD44780_Display();
+}
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
-void CAN_Transmit(uint32_t id, uint8_t *data, uint8_t len) {
-
-	txHeader.StdId = id;
-	txHeader.ExtId = 0x00;
-	txHeader.RTR = CAN_RTR_DATA;
-	txHeader.IDE = CAN_ID_STD;
-	txHeader.DLC = len;
-	txHeader.TransmitGlobalTime = DISABLE;
-
-	if (HAL_CAN_AddTxMessage(&hcan, &txHeader, data, &mailbox) != HAL_OK) {
-		Error_Handler();
-	}
-}
-
-void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
-	countCAN++;
-	HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &RxHeader, RxData);
-	uint32_t canID = RxHeader.StdId;
-	switch (canID) {
-	// Inverter DC Bus Voltage & Current
-	case 0x402:
-		bus_current = ((uint32_t) RxData[7] << 24) + ((uint32_t) RxData[6] << 16)
-				+ ((uint32_t) RxData[5] << 8) + ((uint32_t) RxData[4]);
-
-		bus_voltage = ((uint32_t) RxData[3] << 24) + ((uint32_t) RxData[2] << 16)
-				+ ((uint32_t) RxData[1] << 8) + ((uint32_t) RxData[0]);
-		break;
-	// Speed
-	case 0x403:
-		veh_spd = ((uint32_t) RxData[7] << 24) + ((uint32_t) RxData[6] << 16)
-				+ ((uint32_t) RxData[5] << 8) + ((uint32_t) RxData[4]);
-
-		mot_spd = ((uint32_t) RxData[3] << 24) + ((uint32_t) RxData[2] << 16)
-				+ ((uint32_t) RxData[1] << 8) + ((uint32_t) RxData[0]);
-		break;
-	}
-}
-
-//Timer interrupt
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
-	//100ms
-	if (htim == &htim3) {
-		count++;
-		//next = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_9);
-		//Auxiliary
-		head = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_15)
-				|| HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_13);
-		cam = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_8);
-		tail = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_14)
-				|| HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_13);
-		//horn = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_3);
-		horn = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1);
-		breakl = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1); //check pedal !!!!!!!
-		fan = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_4);
-		blink_r = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_5);
-		blink_l = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_6);
-
-		Aux_State = (head << 7) | (cam << 6) | (tail << 5) | (horn << 4)
-				| (breakl << 3) | (fan << 2) | (blink_r << 1) | (blink_l << 0);
-
-		CAN_Transmit(0x701, &Aux_State, 1);
-
-		//Inv
-		power_on = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_10);
-		forward = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_0);
-		reverse = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_1);
-		//////////////mech_brake_pedal_state = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_1);
-
-		// Cruise control
-		brake_swap = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_7);
-		mech_brake_pedal_state = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4);
-
-		//Start ADC conversion
-		HAL_ADC_Start(&hadc1);
-		// Wait for ADC conversion to complete
-		if (HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY) == HAL_OK) {
-			adcValue = HAL_ADC_GetValue(&hadc1);
-		}
-		//Stop ADC conversion
-		HAL_ADC_Stop(&hadc1);
-
-		// MinMax value
-		adcValue = MIN(adcValue, 3530);
-		adcValue = MAX(adcValue, 200);
-
-		//Getting out of the cruise control on user input
-		if (mech_brake_pedal_state || brake_swap) //||adcValue>250
-				{
-			cruise_on = 0;
-		}
-		//delay the turning off of the cruise from pressing the pedal with two secs so
-		//after initially engaging it, it wont turn off immidiately while the driver
-		//lifts off the foot.
-		if (cruise_on && adcValue > 250) {
-			pedal_count++;
-			if (pedal_count == 10) {
-				cruise_on = 0;
-				pedal_count = 0;
-			}
-		}
-
-		//deciding the rpm and current reference
-		if (power_on) {
-			current_ref = (float) (adcValue - 200) / 3530.0f / 10;
-			if (forward) {
-				if (cruise_on) {
-					//add min-max values!!!!!!!!!!!!!!!!!!!!!!!!!!!! 30-130 for example
-					rpm_ref = cruise_speed;
-					current_ref = 0.05;
-				} else {
-					rpm_ref = 2000;
-				}
-			}
-			if (reverse) {
-				cruise_on = 0;
-				rpm_ref = -2000;
-			}
-
-		}
-		else // if (power_on==0)
-		{
-			current_ref = 0;
-		}
-
-		//send current and rpm refrence to the inverter
-		// Copy 'current' bytes in specified order
-		uint32_t current_bits = *((uint32_t*) &current_ref);
-		message[4] = (current_bits >> 0) & 0xFF;
-		message[5] = (current_bits >> 8) & 0xFF;
-		message[6] = (current_bits >> 16) & 0xFF;
-		message[7] = (current_bits >> 24) & 0xFF;
-
-		// Copy 'rpm' bytes in specified order
-		uint32_t rpm_bits = *((uint32_t*) &rpm_ref);
-		message[0] = (rpm_bits >> 0) & 0xFF;
-		message[1] = (rpm_bits >> 8) & 0xFF;
-		message[2] = (rpm_bits >> 16) & 0xFF;
-		message[3] = (rpm_bits >> 24) & 0xFF;
-
-		CAN_Transmit(0x501, message, 8);
-	}
-	//500 msec
-	if (htim == &htim4) {
-		//500 msec is better for the cruise_on becouse of the debouncing.
-		cruise_button_state = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_9);
-		if (cruise_button_state == 1) {
-			cruise_speed = *p_mot_spd;
-		}
-		//Deciding if the cruise control should be on or off
-		if (cruise_button_state) {
-			if (cruise_on) {
-				cruise_on = 0;
-			} else if (!cruise_on&&*p_mot_spd>200) {//////not final value
-				cruise_on = 1;
-			}
-		}
-		cruise_down = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_7);
-		cruise_up = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_8);
-		/////!!!!!!!!!!!!!!!!!!!!!!!!!not final step(the 10 value)
-		if (cruise_on && cruise_up && cruise_speed < 700) {
-			cruise_speed += 10;
-		}
-		if (cruise_on && cruise_down && cruise_speed > 200) {
-			cruise_speed -= 10;
-		}
-
-	}
-}
 
 /* USER CODE END 0 */
 
@@ -324,14 +190,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 int main(void)
 {
   /* USER CODE BEGIN 1 */
+	uint16_t pedal_gradient = 0;
 
-	countCAN = 0;
-	message[0] = 0;
-	adcValue = 0;
-	Aux_State = 0;
-	cruise_speed = 0;
-	count++;
-	current_ref = 0;
+	char msg[20] = "\0";
 
   /* USER CODE END 1 */
 
@@ -360,10 +221,10 @@ int main(void)
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
 
+	HAL_CAN_Start(&hcan);
 	HAL_TIM_Base_Start_IT(&htim3);
 	HAL_TIM_Base_Start_IT(&htim4);
 
-	HAL_CAN_Start(&hcan);
 	HAL_Delay(50);
 	if (HAL_CAN_ActivateNotification(&hcan, CAN_IT_RX_FIFO0_MSG_PENDING)
 			!= HAL_OK) {
@@ -373,28 +234,100 @@ int main(void)
 	/* Initialize */
 	HD44780_Init(4);
 
-	/* Clear buffer */
+	// Clear screen buffer
 	HD44780_Clear();
 
-	SetUpDisplay(&hi2c1);
+	// BMS idle state
+	p_inv_data[0] = 0x00;
+	p_inv_data[1] = 0x00;
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 	while (1) {
+		update_display(&hi2c1, msg);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-		updateTempsMin(&hi2c1, tempmin);
-		updateTempsMax(&hi2c1, tempmax);
-		updateHighVoltage(&hi2c1, highvol);
-		updateLowVoltage(&hi2c1, lowvol);
-		updateSpeed(&hi2c1, *p_veh_spd);
-		updateSOC(&hi2c1, soc);
-		updateAvgPower(&hi2c1, avgpow);
-		updateInstPower(&hi2c1, (*p_bus_current)*(*p_bus_voltage));
-		updateMessage((char*) &msg);
+		// Cast reference values into CAN output
+		set_invertor_state();
+
+		// If power on button is off keep idle state
+		if (!but_state.power_on) {
+			*p_cur_ref = 0.0f;
+			*p_mot_spd = 0.0f;
+			p_inv_data[0] = 0x00;
+			strcpy(msg, "Motor idle    ");
+			continue;
+		}
+
+		// Enable BMS modes
+		switch (bms_state) {
+			case IDLE:
+			case PRE_CHARGE:
+				// Enable Accessories + Start + Run modes
+				p_inv_data[0] = 0x70;
+				strcpy(msg, "Pre-charge    ");
+				continue;
+			case DRIVE:
+				// Enable Accessories + Run modes
+				p_inv_data[0] = 0x30;
+				break;
+			case ERR:
+			default:
+				// Enter safe-state
+				p_inv_data[0] = 0x00;
+		}
+
+		if (pedal_delay == 0) {
+			// Read pedal gradient
+			HAL_ADC_Start(&hadc1);
+			if (HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY) == HAL_OK) {
+				pedal_gradient = HAL_ADC_GetValue(&hadc1);
+			}
+			HAL_ADC_Stop(&hadc1);
+			// Normalize pedal gradient
+			pedal_gradient = MIN(pedal_gradient, PEDAL_MAX);
+			pedal_gradient = MAX(pedal_gradient, PEDAL_MIN);
+		} else {
+			pedal_delay--;
+		}
+
+		// Disable CC if pedal is pressed
+		if (pedal_gradient > PEDAL_MIN || but_state.brake_swap == 1 || but_state.brake_state == 1)
+			but_state.cruise_mode = 0;
+
+		// Cruise speed control
+		if (but_state.cruise_up && *p_crs_spd < CRUISE_CONTROL_MAX_SPEED)
+			*p_crs_spd += 10.0f;
+
+		if (but_state.cruise_down && *p_crs_spd > CRUISE_CONTROL_MIN_SPEED)
+			*p_crs_spd -= 10.0f;
+
+		// If CC is enabled keep previous reference current value
+		if (but_state.brake_swap) {
+			strcpy(msg, "Brakes on     ");
+			*p_cur_ref = (float)(pedal_gradient - PEDAL_MIN) / (float)(PEDAL_MAX - PEDAL_MIN);;
+			*p_mot_spd = 0.0f;
+		} else if (but_state.cruise_mode && *p_crs_spd > 100.0f) {
+			strcpy(msg, "Cruise control");
+			*p_cur_ref = 0.2f;
+			*p_mot_spd = *p_crs_spd;
+		} else if (but_state.drv_forward) {
+			strcpy(msg, "Drive forward ");
+			*p_cur_ref = (float)(pedal_gradient - PEDAL_MIN) / (float)(PEDAL_MAX - PEDAL_MIN);
+			*p_mot_spd = 2000.0f;  // To quickly accelerate set large angular velocity reference
+		} else if (but_state.drv_reverse) {
+			strcpy(msg, "Drive reverse ");
+			*p_cur_ref = (float)(pedal_gradient - PEDAL_MIN) / (float)(PEDAL_MAX - PEDAL_MIN);
+			*p_mot_spd = -2000.0f;  // To quickly accelerate set large angular velocity reference
+		} else {
+			// Neutral state
+			strcpy(msg, "Neutral mode  ");
+			*p_cur_ref = 0.0f;
+			*p_mot_spd = 0.0f;
+		}
 	}
   /* USER CODE END 3 */
 }
@@ -644,7 +577,7 @@ static void MX_TIM4_Init(void)
   htim4.Instance = TIM4;
   htim4.Init.Prescaler = 7199;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 4999;
+  htim4.Init.Period = 333;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
@@ -685,10 +618,10 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
-  /*Configure GPIO pins : PC0 PC1 PC7 PC8
-                           PC9 */
-  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_7|GPIO_PIN_8
-                          |GPIO_PIN_9;
+  /*Configure GPIO pins : PC0 PC1 PC4 PC7
+                           PC8 PC9 */
+  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_4|GPIO_PIN_7
+                          |GPIO_PIN_8|GPIO_PIN_9;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
@@ -726,8 +659,25 @@ void Error_Handler(void)
   /* USER CODE BEGIN Error_Handler_Debug */
 	/* User can add his own implementation to report the HAL error return state */
 	__disable_irq();
-	while (1) {
+	if (hcan.ErrorCode != HAL_CAN_ERROR_NONE)
+	{
+		// Deinit CAN
+		if (HAL_CAN_DeInit(&hcan) != HAL_OK)
+		{
+			while(1) {}
+		}
+		// Init CAN
+		if (HAL_CAN_Init(&hcan) != HAL_OK)
+		{
+			Error_Handler();
+		}
+		// Start CAN
+		if (HAL_CAN_Start(&hcan) != HAL_OK)
+		{
+			Error_Handler();
+		}
 	}
+	__enable_irq();
   /* USER CODE END Error_Handler_Debug */
 }
 
