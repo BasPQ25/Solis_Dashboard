@@ -153,21 +153,21 @@ void update_display(I2C_HandleTypeDef *hi2c1, char *msg)
 	char buffer[21];
 	float mppt_pow = ((float)((float)mppt1_current + (float)mppt2_current) * (float)mppt1_voltage) / 100.0F;
 	float bat_pow = ((float)bat_current * (float)bat_voltage) / 1000000.0F;
-	float bus_pow = ((float)bus_current * (float)bus_voltage) / 1000.0F;
+	float bus_pow = *p_bus_current * *p_bus_voltage;
 
 	// Display first row
 	HD44780_SetCursor(0, 0);
-	sprintf(buffer, "%4.1f |V: %4.0f | %4.2f", *p_tmp_min, (*p_veh_spd) * 3.6, *p_vol_min);
+	snprintf(buffer, 21, "%4.1f |V: %4.0f | %4.2f", *p_tmp_min, (*p_veh_spd) * 3.6, *p_vol_min);
 	HD44780_PrintStr(buffer);
 
 	// Display second row
 	HD44780_SetCursor(0, 1);
-	sprintf(buffer, "%4.1f |%%: %4.0f | %4.2f", *p_tmp_max, (*p_charge) * 100.f, *p_vol_max);
+	snprintf(buffer, 21, "%4.1f |%%: %4.0f | %4.2f", *p_tmp_max, (*p_charge) * 100.f, *p_vol_max);
 	HD44780_PrintStr(buffer);
 
 	// Display third row
 	HD44780_SetCursor(0, 2);
-	sprintf(buffer, "%4.2f |   %4.2f | %4.2f", mppt_pow, bat_pow, bus_pow);
+	snprintf(buffer, 21, "%4.0f | %6.0f | %4.0f", mppt_pow, bat_pow, bus_pow);
 	HD44780_PrintStr(buffer);
 
 	// Display message
