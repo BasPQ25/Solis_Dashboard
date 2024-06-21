@@ -67,7 +67,9 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-
+static const CAN_TxHeaderTypeDef bms_header = { 0x501, 0x00, CAN_RTR_DATA, CAN_ID_STD, 8, DISABLE };
+static const CAN_TxHeaderTypeDef inv_header = { 0x505, 0x00, CAN_RTR_DATA, CAN_ID_STD, 8, DISABLE };
+static const CAN_TxHeaderTypeDef aux_header = { 0x510, 0x00, CAN_RTR_DATA, CAN_ID_STD, 1, DISABLE };
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -353,28 +355,28 @@ void USB_LP_CAN1_RX0_IRQHandler(void)
 	case CAN_BUS_MSG:
 		// @formatter:off
 		bus_current = (data[7] << 24) + (data[6] << 16) + (data[5] << 8) + data[4];
-		*p_bus_current = *(float *)&bus_current;
+		memcpy(p_bus_current, &bus_current, sizeof(float));
 
 		bus_voltage = (data[3] << 24) + (data[2] << 16) + (data[1] << 8) + data[0];
-		*p_bus_voltage = *(float *)&bus_voltage;
+		memcpy(p_bus_voltage, &bus_voltage, sizeof(float));
 				// @formatter:on
 		break;
 	// Speed
 	case CAN_MTR_MSG:
 		// @formatter:off
 		veh_speed = (data[7] << 24) + (data[6] << 16) + (data[5] << 8) + data[4];
-		*p_veh_spd = *(float *)&veh_speed;
+		memcpy(p_veh_spd, &veh_speed, sizeof(float));
 
 		mot_speed = (data[3] << 24) + (data[2] << 16) + (data[1] << 8) + data[0];
 		if (but_state.cruise_mode == 0)
-			*p_crs_spd = *(float *)&mot_speed;
+			memcpy(p_crs_spd, &mot_speed, sizeof(float));
 				// @formatter:on
 		break;
 	//State of charge
 	case CAN_SOC_MSG:
 		// @formatter:off
 		soc = (data[7] << 24) + (data[6] << 16) + (data[5] << 8) + data[4];
-		*p_charge = *(float *)&soc;
+		memcpy(p_charge, &soc, sizeof(float));
 		// @formatter:on
 		break;
 	// Minimum & maximum voltages
@@ -437,9 +439,6 @@ void TIM3_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM3_IRQn 0 */
 	// @formatter:off
-	const CAN_TxHeaderTypeDef bms_header = { 0x501, 0x00, CAN_RTR_DATA, CAN_ID_STD, 8, DISABLE };
-	const CAN_TxHeaderTypeDef inv_header = { 0x505, 0x00, CAN_RTR_DATA, CAN_ID_STD, 8, DISABLE };
-	const CAN_TxHeaderTypeDef aux_header = { 0x510, 0x00, CAN_RTR_DATA, CAN_ID_STD, 1, DISABLE };
 	uint32_t bms_mailbox = CAN_TX_MAILBOX0;
 	uint32_t inv_mailbox = CAN_TX_MAILBOX1;
 	uint32_t aux_mailbox = CAN_TX_MAILBOX2;
@@ -464,6 +463,7 @@ void TIM3_IRQHandler(void)
 			!= HAL_OK) {
 		Error_Handler();
 	}
+
   /* USER CODE END TIM3_IRQn 1 */
 }
 
