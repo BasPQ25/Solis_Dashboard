@@ -69,7 +69,7 @@
 /* USER CODE BEGIN PV */
 static const CAN_TxHeaderTypeDef bms_header = { 0x501, 0x00, CAN_RTR_DATA, CAN_ID_STD, 8, DISABLE };
 static const CAN_TxHeaderTypeDef inv_header = { 0x505, 0x00, CAN_RTR_DATA, CAN_ID_STD, 8, DISABLE };
-static const CAN_TxHeaderTypeDef aux_header = { 0x510, 0x00, CAN_RTR_DATA, CAN_ID_STD, 1, DISABLE };
+static const CAN_TxHeaderTypeDef aux_header = { 0x701, 0x00, CAN_RTR_DATA, CAN_ID_STD, 1, DISABLE };
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -211,6 +211,7 @@ void HardFault_Handler(void)
   while (1)
   {
     /* USER CODE BEGIN W1_HardFault_IRQn 0 */
+	  NVIC_SystemReset();
     /* USER CODE END W1_HardFault_IRQn 0 */
   }
 }
@@ -256,6 +257,7 @@ void UsageFault_Handler(void)
   while (1)
   {
     /* USER CODE BEGIN W1_UsageFault_IRQn 0 */
+	  NVIC_SystemReset();
     /* USER CODE END W1_UsageFault_IRQn 0 */
   }
 }
@@ -268,6 +270,7 @@ void SVC_Handler(void)
   /* USER CODE BEGIN SVCall_IRQn 0 */
 
   /* USER CODE END SVCall_IRQn 0 */
+	NVIC_SystemReset();
   /* USER CODE BEGIN SVCall_IRQn 1 */
 
   /* USER CODE END SVCall_IRQn 1 */

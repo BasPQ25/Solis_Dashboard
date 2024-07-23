@@ -190,6 +190,11 @@ void update_display(I2C_HandleTypeDef *hi2c1, char *msg)
 int main(void)
 {
   /* USER CODE BEGIN 1 */
+	//Delay cum au spus baietii de pe forumuri, nu merge 100% fara
+		long j = 100000;
+		while(--j)
+		{
+		}
 	uint16_t pedal_gradient = 0;
 
 	char msg[20] = "\0";
@@ -199,7 +204,9 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+
+	//First Reset after supplying voltage  error
+		if( HAL_Init() != HAL_OK)	NVIC_SystemReset();
 
   /* USER CODE BEGIN Init */
 
@@ -278,10 +285,13 @@ int main(void)
 			default:
 				// Enter safe-state
 				p_inv_data[0] = 0x00;
+
+				//de resetat cand intra in eroare
 		}
 
-		if (pedal_delay == 0) {
+		if (pedal_delay == 0 ) {
 			// Read pedal gradient
+			HAL_Delay(50);
 			HAL_ADC_Start(&hadc1);
 			if (HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY) == HAL_OK) {
 				pedal_gradient = HAL_ADC_GetValue(&hadc1);
@@ -658,6 +668,7 @@ void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
 	/* User can add his own implementation to report the HAL error return state */
+	NVIC_SystemReset();
 	__disable_irq();
 	if (hcan.ErrorCode != HAL_CAN_ERROR_NONE)
 	{
