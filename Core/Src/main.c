@@ -22,6 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <string.h>
+#include"stdio.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -35,6 +36,8 @@ enum State bms_state = IDLE;
 #define CRUISE_CONTROL_MIN_SPEED 100.0f
 #define PEDAL_MIN 200
 #define PEDAL_MAX 3530
+
+
 //#define PEDAL_MAX 2630
 /* USER CODE END PD */
 
@@ -53,6 +56,8 @@ I2C_HandleTypeDef hi2c1;
 
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
+
+UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 // Buttons' state
@@ -110,6 +115,7 @@ float* const p_vol_max = (float*) &vol_max;
 
 static uint32_t cur_ref = 0;
 float* const p_cur_ref = (float*) &cur_ref;
+float current_ref = 0;
 
 static uint32_t charge = 0;
 float* const p_charge = (float*) &charge;
@@ -118,6 +124,22 @@ static uint32_t crs_spd = 0;
 float* const p_crs_spd = (float*) &crs_spd;
 
 uint32_t pedal_delay = 0;
+
+//VARIABILE ADAUGATE DE PAUL
+	//eroare software overcurrent
+	uint8_t SWOC_flag = 0;
+
+	float prev_current_ref = 0;
+	static float delta = 0.05f;
+
+	uint8_t can_message_trasmitted = 0;
+	uint32_t bus_current_mailbox = CAN_TX_MAILBOX2;
+
+	static const CAN_TxHeaderTypeDef bus_current_header = {0x502,0x00,CAN_RTR_DATA,CAN_ID_STD,8,DISABLE};
+	static uint8_t bus_current_data[8];
+
+static float bus_current_limit = 1.0f;
+#define MAX_CURRENT_REF  0.5f
 
 /* USER CODE END PV */
 
@@ -129,6 +151,7 @@ static void MX_ADC1_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_TIM4_Init(void);
+static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
 void set_invertor_state()
 {
@@ -181,6 +204,7 @@ void update_display(I2C_HandleTypeDef *hi2c1, char *msg)
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+
 /* USER CODE END 0 */
 
 /**
@@ -189,24 +213,24 @@ void update_display(I2C_HandleTypeDef *hi2c1, char *msg)
   */
 int main(void)
 {
+
   /* USER CODE BEGIN 1 */
 	//Delay cum au spus baietii de pe forumuri, nu merge 100% fara
 		long j = 100000;
-		while(--j)
-		{
-		}
+		while(--j){}
+
 	uint16_t pedal_gradient = 0;
 
 	char msg[20] = "\0";
+
+
 
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-
-	//First Reset after supplying voltage  error
-		if( HAL_Init() != HAL_OK)	NVIC_SystemReset();
+  HAL_Init();
 
   /* USER CODE BEGIN Init */
 
@@ -226,6 +250,7 @@ int main(void)
   MX_TIM3_Init();
   MX_I2C1_Init();
   MX_TIM4_Init();
+  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
 
 	HAL_CAN_Start(&hcan);
@@ -247,6 +272,12 @@ int main(void)
 	// BMS idle state
 	p_inv_data[0] = 0x00;
 	p_inv_data[1] = 0x00;
+
+	memcpy(&bus_current_data[4], &bus_current_limit, sizeof(float));
+	if (HAL_CAN_AddTxMessage(&hcan, &bus_current_header, bus_current_data, &bus_current_mailbox) != HAL_OK)
+	{
+		 Error_Handler();
+	}
 
   /* USER CODE END 2 */
 
@@ -325,9 +356,24 @@ int main(void)
 			*p_cur_ref = 0.2f;
 			*p_mot_spd = *p_crs_spd;
 		} else if (but_state.drv_forward) {
-			strcpy(msg, "Drive forward ");
-			*p_cur_ref = (float)(pedal_gradient - PEDAL_MIN) / (float)(PEDAL_MAX - PEDAL_MIN);
-			*p_mot_spd = 2000.0f;  // To quickly accelerate set large angular velocity reference
+				strcpy(msg, "Drive forward ");
+				//Testtt SWOC = Software overcurrent
+					if(SWOC_flag == 1)
+					{
+						current_ref = (float)(pedal_gradient - PEDAL_MIN) / (float)(PEDAL_MAX - PEDAL_MIN);
+						if(current_ref - prev_current_ref >= delta)
+						{
+							*p_cur_ref += delta;
+						}
+						else *p_cur_ref = current_ref;
+						if (*p_cur_ref > MAX_CURRENT_REF && *(p_veh_spd) * 3.6 <= 20)
+						{
+						    *p_cur_ref = MAX_CURRENT_REF;
+						}
+						prev_current_ref = current_ref;
+						SWOC_flag = 0;
+					}
+				*p_mot_spd = 2000.0f;  // To quickly accelerate set large angular velocity reference
 		} else if (but_state.drv_reverse) {
 			strcpy(msg, "Drive reverse ");
 			*p_cur_ref = (float)(pedal_gradient - PEDAL_MIN) / (float)(PEDAL_MAX - PEDAL_MIN);
@@ -339,6 +385,7 @@ int main(void)
 			*p_mot_spd = 0.0f;
 		}
 	}
+
   /* USER CODE END 3 */
 }
 
@@ -542,7 +589,7 @@ static void MX_TIM3_Init(void)
   htim3.Instance = TIM3;
   htim3.Init.Prescaler = 7199;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 999;
+  htim3.Init.Period = 499;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
@@ -587,7 +634,7 @@ static void MX_TIM4_Init(void)
   htim4.Instance = TIM4;
   htim4.Init.Prescaler = 7199;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 333;
+  htim4.Init.Period = 999;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
@@ -608,6 +655,39 @@ static void MX_TIM4_Init(void)
   /* USER CODE BEGIN TIM4_Init 2 */
 
   /* USER CODE END TIM4_Init 2 */
+
+}
+
+/**
+  * @brief USART2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART2_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART2_Init 0 */
+
+  /* USER CODE END USART2_Init 0 */
+
+  /* USER CODE BEGIN USART2_Init 1 */
+
+  /* USER CODE END USART2_Init 1 */
+  huart2.Instance = USART2;
+  huart2.Init.BaudRate = 115200;
+  huart2.Init.WordLength = UART_WORDLENGTH_8B;
+  huart2.Init.StopBits = UART_STOPBITS_1;
+  huart2.Init.Parity = UART_PARITY_NONE;
+  huart2.Init.Mode = UART_MODE_TX_RX;
+  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART2_Init 2 */
+
+  /* USER CODE END USART2_Init 2 */
 
 }
 
@@ -637,9 +717,9 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PA1 PA4 PA7 PA8
-                           PA9 PA10 PA13 */
+                           PA9 PA10 */
   GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_4|GPIO_PIN_7|GPIO_PIN_8
-                          |GPIO_PIN_9|GPIO_PIN_10|GPIO_PIN_13;
+                          |GPIO_PIN_9|GPIO_PIN_10;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);

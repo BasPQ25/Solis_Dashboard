@@ -58,6 +58,9 @@
 #define MASK_LIG_RR 0x2000
 #define MASK_CAMERA 0x4000
 #define MASK_LIG_HD 0x8000
+
+#define SOFTWARE_OVERCURRENT_ERROR 0x401
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -67,9 +70,18 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
+
 static const CAN_TxHeaderTypeDef bms_header = { 0x501, 0x00, CAN_RTR_DATA, CAN_ID_STD, 8, DISABLE };
 static const CAN_TxHeaderTypeDef inv_header = { 0x505, 0x00, CAN_RTR_DATA, CAN_ID_STD, 8, DISABLE };
 static const CAN_TxHeaderTypeDef aux_header = { 0x701, 0x00, CAN_RTR_DATA, CAN_ID_STD, 1, DISABLE };
+static const CAN_TxHeaderTypeDef inv_error_header = {0x503,0x00,CAN_RTR_DATA,CAN_ID_STD,1,DISABLE};
+
+//Adaugat de Paul, SWOC
+
+
+//for UART
+extern UART_HandleTypeDef huart2;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -126,6 +138,8 @@ void push_state(button* but, uint16_t mask, uint8_t input)
 	else
 		but_state.button_states &= ~mask;
 }
+
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -181,6 +195,13 @@ extern uint8_t *const p_aux_data;
 extern uint32_t cruise_speed;
 extern uint16_t pedal_gradient;
 extern uint32_t pedal_delay;
+
+extern uint8_t SWOC_flag;
+
+//extern float current_ref;
+
+
+
 /* USER CODE END EV */
 
 /******************************************************************************/
@@ -270,7 +291,6 @@ void SVC_Handler(void)
   /* USER CODE BEGIN SVCall_IRQn 0 */
 
   /* USER CODE END SVCall_IRQn 0 */
-	NVIC_SystemReset();
   /* USER CODE BEGIN SVCall_IRQn 1 */
 
   /* USER CODE END SVCall_IRQn 1 */
@@ -417,11 +437,14 @@ void USB_LP_CAN1_RX0_IRQHandler(void)
 		case 4:  // Run
 			bms_state = DRIVE;
 			break;
-		case 0:  // Error
+		case 0:
+
+
 		default:
 			bms_state = ERROR;
 			break;
 		}
+
 		break;
 	// BMU current & voltage
 	case CAN_BATTERY:
@@ -431,6 +454,23 @@ void USB_LP_CAN1_RX0_IRQHandler(void)
 		*p_bat_current = (data[7] << 24) + (data[6] << 16) + (data[5] << 8) + data[4];
 		// @formatter:on
 		break;
+
+	case SOFTWARE_OVERCURRENT_ERROR:
+					if(data[2] && 0x02)
+					{
+						uint32_t error_mailbox = 0;
+						uint8_t error_data[1] = {0x00};
+
+						//disable all interrupts to make sure the reset frame will be transmitted as fast as possible.
+
+						__disable_irq();
+
+						while(!HAL_CAN_GetTxMailboxesFreeLevel(&hcan)) {} //wait for a mailbox to get free
+						HAL_CAN_AddTxMessage(&hcan, &inv_error_header, error_data, &error_mailbox); //transmit can frame for error reset
+
+						__enable_irq();
+					}
+			break;
 	}
   /* USER CODE END USB_LP_CAN1_RX0_IRQn 1 */
 }
@@ -442,9 +482,13 @@ void TIM3_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM3_IRQn 0 */
 	// @formatter:off
+
 	uint32_t bms_mailbox = CAN_TX_MAILBOX0;
 	uint32_t inv_mailbox = CAN_TX_MAILBOX1;
 	uint32_t aux_mailbox = CAN_TX_MAILBOX2;
+
+
+
 	// @formatter:on
 
   /* USER CODE END TIM3_IRQn 0 */
@@ -455,17 +499,27 @@ void TIM3_IRQHandler(void)
 	if (HAL_CAN_AddTxMessage(&hcan, &bms_header, p_bms_data, &bms_mailbox)
 			!= HAL_OK) {
 		Error_Handler();
+
 	}
 	// Invertor RPM & current reference command
 	if (HAL_CAN_AddTxMessage(&hcan, &inv_header, p_inv_data, &inv_mailbox)
 			!= HAL_OK) {
 		Error_Handler();
 	}
-	// AUX status
+
+	//AUX status
 	if (HAL_CAN_AddTxMessage(&hcan, &aux_header, p_aux_data, &aux_mailbox)
 			!= HAL_OK) {
 		Error_Handler();
 	}
+
+
+
+	SWOC_flag = 1;
+
+// 	Uart_Transmitter(&huart2,*p_cur_ref);
+
+
 
   /* USER CODE END TIM3_IRQn 1 */
 }
