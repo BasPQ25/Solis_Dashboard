@@ -22,6 +22,7 @@
 #include "stm32f1xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include"added_function.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -513,6 +514,7 @@ void TIM3_IRQHandler(void)
 		Error_Handler();
 	}
 
+	//Calcul_Putere_Lap();
 
 
 	SWOC_flag = 1;

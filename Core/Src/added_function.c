@@ -4,9 +4,15 @@ void Feedback_Erori()
 {
 
 }
-
-void Calul_Putere_Lap()
+void Calul_Putere_Lap(float* p_bus_power)
 {
+	static uint32_t power_samples = 0;
+	static int64_t Power_Sum = 0;
+
+	Power_Sum += *p_bus_power;
+	power_samples++;
+
+
 
 }
 

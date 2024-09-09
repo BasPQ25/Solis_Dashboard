@@ -23,6 +23,7 @@
 /* USER CODE BEGIN Includes */
 #include <string.h>
 #include"stdio.h"
+#include"added_function.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -132,14 +133,15 @@ uint32_t pedal_delay = 0;
 	float prev_current_ref = 0;
 	static float delta = 0.05f;
 
-	uint8_t can_message_trasmitted = 0;
 	uint32_t bus_current_mailbox = CAN_TX_MAILBOX2;
 
 	static const CAN_TxHeaderTypeDef bus_current_header = {0x502,0x00,CAN_RTR_DATA,CAN_ID_STD,8,DISABLE};
 	static uint8_t bus_current_data[8];
 
-static float bus_current_limit = 1.0f;
-#define MAX_CURRENT_REF  0.5f
+	static float bus_current_limit = 1.0f;
+	#define  MAX_CURRENT_REF  0.5f
+	#define SPEED_LIMIT  20
+
 
 /* USER CODE END PV */
 
@@ -196,6 +198,9 @@ void update_display(I2C_HandleTypeDef *hi2c1, char *msg)
 	// Display message
 	HD44780_SetCursor(0, 3);
 	HD44780_PrintStr(msg);
+	HD44780_SetCursor(8, 3);
+	snprintf(buffer, 21, "Prv Lap:%4.f", *p_veh_spd); //contiuna
+	HD44780_PrintStr(buffer);
 
 	HD44780_Display();
 }
@@ -296,7 +301,7 @@ int main(void)
 			*p_cur_ref = 0.0f;
 			*p_mot_spd = 0.0f;
 			p_inv_data[0] = 0x00;
-			strcpy(msg, "Motor idle    ");
+			strcpy(msg, "M Idle");
 			continue;
 		}
 
@@ -306,7 +311,7 @@ int main(void)
 			case PRE_CHARGE:
 				// Enable Accessories + Start + Run modes
 				p_inv_data[0] = 0x70;
-				strcpy(msg, "Pre-charge    ");
+				strcpy(msg, "PreChg");
 				continue;
 			case DRIVE:
 				// Enable Accessories + Run modes
@@ -348,15 +353,15 @@ int main(void)
 
 		// If CC is enabled keep previous reference current value
 		if (but_state.brake_swap) {
-			strcpy(msg, "Brakes on     ");
+			strcpy(msg, "Brk on");
 			*p_cur_ref = (float)(pedal_gradient - PEDAL_MIN) / (float)(PEDAL_MAX - PEDAL_MIN);;
 			*p_mot_spd = 0.0f;
 		} else if (but_state.cruise_mode && *p_crs_spd > 100.0f) {
-			strcpy(msg, "Cruise control");
+			strcpy(msg, "Cr Con");
 			*p_cur_ref = 0.2f;
 			*p_mot_spd = *p_crs_spd;
 		} else if (but_state.drv_forward) {
-				strcpy(msg, "Drive forward ");
+				strcpy(msg, "Dr fwd ");
 				//Testtt SWOC = Software overcurrent
 					if(SWOC_flag == 1)
 					{
@@ -366,24 +371,25 @@ int main(void)
 							*p_cur_ref += delta;
 						}
 						else *p_cur_ref = current_ref;
-						if (*p_cur_ref > MAX_CURRENT_REF && *(p_veh_spd) * 3.6 <= 20)
+						if (*p_cur_ref > MAX_CURRENT_REF && *(p_veh_spd) * 3.6 <= SPEED_LIMIT)
 						{
-						    *p_cur_ref = MAX_CURRENT_REF;
+							*p_cur_ref = MAX_CURRENT_REF;
 						}
 						prev_current_ref = current_ref;
 						SWOC_flag = 0;
 					}
 				*p_mot_spd = 2000.0f;  // To quickly accelerate set large angular velocity reference
 		} else if (but_state.drv_reverse) {
-			strcpy(msg, "Drive reverse ");
+			strcpy(msg, "Dr rvs");
 			*p_cur_ref = (float)(pedal_gradient - PEDAL_MIN) / (float)(PEDAL_MAX - PEDAL_MIN);
 			*p_mot_spd = -2000.0f;  // To quickly accelerate set large angular velocity reference
 		} else {
 			// Neutral state
-			strcpy(msg, "Neutral mode  ");
+			strcpy(msg, "N mode");
 			*p_cur_ref = 0.0f;
 			*p_mot_spd = 0.0f;
 		}
+
 	}
 
   /* USER CODE END 3 */
