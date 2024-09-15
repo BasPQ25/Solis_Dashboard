@@ -197,7 +197,15 @@ extern uint32_t cruise_speed;
 extern uint16_t pedal_gradient;
 extern uint32_t pedal_delay;
 
+
 extern uint8_t SWOC_flag;
+float Power_Sum_Print  = 0;
+uint8_t Power_Button_Pressed = 0;
+uint8_t Start_Display_Power = 0;
+uint8_t Display_Counter = 0;
+
+
+extern float bus_pow;
 
 //extern float current_ref;
 
@@ -585,9 +593,34 @@ void TIM4_IRQHandler(void)
 	button_state = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_9);
 	toggle_state(&cruise_mode, MASK_CRU_MD, button_state);
 
+
 	if (button_state == 1) {
 		pedal_delay = 50;
 	}
+
+	//power calculator
+	static uint8_t count_power_button_press = 0;
+
+	if( HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_9) ) count_power_button_press++;
+	else count_power_button_press = 0;
+
+	if(count_power_button_press == 3)
+	{
+		Power_Button_Pressed = (!Power_Button_Pressed);
+		Start_Display_Power = 1;
+	}
+	if(Start_Display_Power == 1)
+	{
+			Display_Counter++;
+			if(Display_Counter == 10)
+				{
+					Display_Counter = 10;
+					Start_Display_Power = 0;
+				}
+	}
+	else Display_Counter = 0;
+	Calul_Putere_Lap(bus_pow, Power_Button_Pressed, &Power_Sum_Print);
+
 	// @formatter:on
   /* USER CODE END TIM4_IRQn 1 */
 }

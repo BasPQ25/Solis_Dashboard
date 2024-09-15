@@ -143,6 +143,15 @@ uint32_t pedal_delay = 0;
 	#define SPEED_LIMIT  20
 
 
+	extern float Power_Sum_Print;
+
+	float bus_pow = 0;
+
+	extern uint8_t Start_Display_Power;
+	extern uint8_t Display_Counter;
+
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -178,7 +187,7 @@ void update_display(I2C_HandleTypeDef *hi2c1, char *msg)
 	char buffer[21];
 	float mppt_pow = ((float)((float)mppt1_current + (float)mppt2_current) * (float)mppt1_voltage) / 100.0F;
 	float bat_pow = ((float)bat_current * (float)bat_voltage) / 1000000.0F;
-	float bus_pow = *p_bus_current * *p_bus_voltage;
+	bus_pow = *p_bus_current * *p_bus_voltage;
 
 	// Display first row
 	HD44780_SetCursor(0, 0);
@@ -199,7 +208,15 @@ void update_display(I2C_HandleTypeDef *hi2c1, char *msg)
 	HD44780_SetCursor(0, 3);
 	HD44780_PrintStr(msg);
 	HD44780_SetCursor(8, 3);
-	snprintf(buffer, 21, "Prv Lap:%4.f", *p_veh_spd); //contiuna
+	if(Start_Display_Power == 1 && Display_Counter < 10)
+	{
+		snprintf(buffer, 21, "NEW LAP!!!  ");
+	}
+	else if(Display_Counter == 10 || Start_Display_Power == 0)
+	{
+		snprintf(buffer, 21, "Prv Lap:%4.0f", Power_Sum_Print); //contiuna
+	}
+
 	HD44780_PrintStr(buffer);
 
 	HD44780_Display();

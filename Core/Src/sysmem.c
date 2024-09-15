@@ -24,6 +24,7 @@
 #include <errno.h>
 #include <stdint.h>
 
+
 /**
  * Pointer to the current high watermark of the heap usage
  */
