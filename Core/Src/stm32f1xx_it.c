@@ -146,7 +146,7 @@ void push_state(button* but, uint16_t mask, uint8_t input)
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 // @formatter:off
-// Button = { counter, counter_limit, is_released }
+
 static button cruise_mode = { 0, 5, 0 };
 static button cruise_up   = { 0, 2, 0 };
 static button cruise_down = { 0, 2, 0 };
