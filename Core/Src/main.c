@@ -126,9 +126,12 @@ float* const p_crs_spd = (float*) &crs_spd;
 
 uint32_t pedal_delay = 0;
 
+uint8_t auxiliary_safe_state = 0;
+
 //VARIABILE ADAUGATE DE PAUL
 	//eroare software overcurrent
 	uint8_t SWOC_flag = 0;
+	uint8_t safe_state = 0;
 
 	float prev_current_ref = 0;
 	static float delta = 0.05f;
@@ -184,6 +187,7 @@ void update_display(I2C_HandleTypeDef *hi2c1, char *msg)
 	if (HAL_I2C_IsDeviceReady(hi2c1, DEVICE_ADDR, 2, 10) != HAL_OK)
 		return;
 
+	char left_blink, right_blink;
 	char buffer[21];
 	float mppt_pow = ((float)((float)mppt1_current + (float)mppt2_current) * (float)mppt1_voltage) / 100.0F;
 	float bat_pow = ((float)bat_current * (float)bat_voltage) / 1000000.0F;
@@ -191,7 +195,7 @@ void update_display(I2C_HandleTypeDef *hi2c1, char *msg)
 
 	// Display first row
 	HD44780_SetCursor(0, 0);
-	snprintf(buffer, 21, "%4.1f |V: %4.0f | %4.2f", *p_tmp_min, (*p_veh_spd) * 3.6, *p_vol_min);
+	snprintf(buffer, 21, "%4.1f |V: %4.0f | %4.2f", *p_tmp_min, (-*p_veh_spd) * 3.6, *p_vol_min);
 	HD44780_PrintStr(buffer);
 
 	// Display second row
@@ -207,16 +211,20 @@ void update_display(I2C_HandleTypeDef *hi2c1, char *msg)
 	// Display message
 	HD44780_SetCursor(0, 3);
 	HD44780_PrintStr(msg);
-	HD44780_SetCursor(8, 3);
+
+	// Blinkers
+	left_blink = (but_state.blink_left == 0) ? ' ' : '<';
+	right_blink = (but_state.blink_right == 0) ? ' ' : '>';
+
 	if(Start_Display_Power == 1 && Display_Counter < 10)
 	{
-		snprintf(buffer, 21, "NEW LAP!!!  ");
+		snprintf(buffer, 13, "%c%c NEW LAP!!", left_blink, right_blink);
 	}
 	else if(Display_Counter == 10 || Start_Display_Power == 0)
 	{
-		snprintf(buffer, 21, "Prv Lap:%4.0f", Power_Sum_Print); //contiuna
+		snprintf(buffer, 11, "%c%c L :%4.0f", left_blink, right_blink, Power_Sum_Print);
 	}
-
+	HD44780_SetCursor(8, 3);
 	HD44780_PrintStr(buffer);
 
 	HD44780_Display();
@@ -319,6 +327,7 @@ int main(void)
 			*p_mot_spd = 0.0f;
 			p_inv_data[0] = 0x00;
 			strcpy(msg, "M Idle");
+			auxiliary_safe_state = 1;
 			continue;
 		}
 
@@ -377,7 +386,8 @@ int main(void)
 			strcpy(msg, "Cr Con");
 			*p_cur_ref = 0.2f;
 			*p_mot_spd = *p_crs_spd;
-		} else if (but_state.drv_forward) {
+			auxiliary_safe_state = 0;
+		} else if (but_state.drv_forward) { // butoanele au fost inversate
 				strcpy(msg, "Dr fwd ");
 				//Testtt SWOC = Software overcurrent
 					if(SWOC_flag == 1)
@@ -395,11 +405,13 @@ int main(void)
 						prev_current_ref = current_ref;
 						SWOC_flag = 0;
 					}
-				*p_mot_spd = 2000.0f;  // To quickly accelerate set large angular velocity reference
+				*p_mot_spd = -2000.0f;  // To quickly accelerate set large angular velocity reference
+				 auxiliary_safe_state = 0;
 		} else if (but_state.drv_reverse) {
 			strcpy(msg, "Dr rvs");
 			*p_cur_ref = (float)(pedal_gradient - PEDAL_MIN) / (float)(PEDAL_MAX - PEDAL_MIN);
-			*p_mot_spd = -2000.0f;  // To quickly accelerate set large angular velocity reference
+			*p_mot_spd = 2000.0f;
+			 auxiliary_safe_state = 0;  // To quickly accelerate set large angular velocity reference
 		} else {
 			// Neutral state
 			strcpy(msg, "N mode");

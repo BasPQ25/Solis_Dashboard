@@ -33,6 +33,7 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define CRUISE_CONTROL_STEP 10
+#define CAN_EMERGEN 0x100
 #define CAN_PW1_MSG 0x200
 #define CAN_PW2_MSG 0x210
 #define CAN_BUS_MSG 0x402
@@ -82,7 +83,7 @@ static const CAN_TxHeaderTypeDef inv_error_header = {0x503,0x00,CAN_RTR_DATA,CAN
 
 //for UART
 extern UART_HandleTypeDef huart2;
-
+extern uint8_t safe_state;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -206,6 +207,7 @@ uint8_t Display_Counter = 0;
 
 
 extern float bus_pow;
+extern uint8_t auxiliary_safe_state;
 
 //extern float current_ref;
 
@@ -367,6 +369,10 @@ void USB_LP_CAN1_RX0_IRQHandler(void)
   /* USER CODE BEGIN USB_LP_CAN1_RX0_IRQn 1 */
 	HAL_CAN_GetRxMessage(&hcan, CAN_RX_FIFO0, &header, data);
 	switch (header.StdId) {
+	// Emergency button
+	case CAN_EMERGEN:
+		safe_state = data[0];
+		break;
 	// Output power form front MPPT
 	case CAN_PW1_MSG:
 		// @formatter:off
@@ -517,6 +523,7 @@ void TIM3_IRQHandler(void)
 	}
 
 	//AUX status
+
 	if (HAL_CAN_AddTxMessage(&hcan, &aux_header, p_aux_data, &aux_mailbox)
 			!= HAL_OK) {
 		Error_Handler();
@@ -545,6 +552,7 @@ void TIM4_IRQHandler(void)
   HAL_TIM_IRQHandler(&htim4);
   /* USER CODE BEGIN TIM4_IRQn 1 */
 	// @formatter:off
+
 	button_state = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_15) || HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_13);
 	push_state(&head_lights, MASK_LIG_HD, button_state);
 
@@ -557,15 +565,18 @@ void TIM4_IRQHandler(void)
 	button_state = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1);
 	push_state(&horn, MASK_HORN, button_state);
 
-	button_state = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1);
+	button_state = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1) ||  HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4) || HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_7);
 	push_state(&brake_light, MASK_LIG_BR, button_state);
 
+	but_state.fan = 0;
 	button_state = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_4);
 	push_state(&fan, MASK_FAN, button_state);
 
+	but_state.blink_right = 0;
 	button_state = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_5);
 	push_state(&blink_right, MASK_BLIN_R, button_state);
 
+	but_state.blink_left = 0;
 	button_state = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_6);
 	push_state(&blink_left, MASK_BLIN_L, button_state);
 
@@ -593,6 +604,13 @@ void TIM4_IRQHandler(void)
 	button_state = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_9);
 	toggle_state(&cruise_mode, MASK_CRU_MD, button_state);
 
+	//Safe State command
+		if(auxiliary_safe_state == 1)
+		{
+			but_state.fan = 1;
+			but_state.blink_left = 1;
+			but_state.blink_right = 1;
+		}
 
 	if (button_state == 1) {
 		pedal_delay = 50;
