@@ -156,7 +156,7 @@ static button rear_lights = { 0, 2, 0 };
 static button brake_light = { 0, 2, 0 };
 static button camera      = { 0, 2, 0 };
 static button horn        = { 0, 2, 0 };
-static button fan         = { 0, 2, 0 };
+//static button fan         = { 0, 2, 0 };
 static button blink_left  = { 0, 2, 0 };
 static button blink_right = { 0, 2, 0 };
 static button power_on    = { 0, 2, 0 };
@@ -200,13 +200,26 @@ extern uint32_t pedal_delay;
 
 
 extern uint8_t SWOC_flag;
+
 float Power_Sum_Print  = 0;
+float* p_Power_Sum_Print  = &Power_Sum_Print;
+
 uint8_t Power_Button_Pressed = 0;
+uint8_t* p_Power_Button_Pressed = &Power_Button_Pressed;
+
+uint8_t Echo_Button_Pressed = 0;
+uint8_t* p_Echo_Button_Pressed = &Echo_Button_Pressed;
+
 uint8_t Start_Display_Power = 0;
 uint8_t Display_Counter = 0;
 
+uint8_t Echo_Mode = 0;
+uint8_t* p_Echo_Mode = &Echo_Mode;
 
-extern float bus_pow;
+
+extern float bat_pow;
+extern float* p_bat_pow;
+
 extern uint8_t auxiliary_safe_state;
 
 //extern float current_ref;
@@ -476,7 +489,7 @@ void USB_LP_CAN1_RX0_IRQHandler(void)
 						uint32_t error_mailbox = 0;
 						uint8_t error_data[1] = {0x00};
 
-						//disable all interrupts to make sure the reset frame will be transmitted as fast as possible.
+						//disable all interrupts to make sure the rreset frame will be transmitted as fast as possible.
 
 						__disable_irq();
 
@@ -569,8 +582,7 @@ void TIM4_IRQHandler(void)
 	push_state(&brake_light, MASK_LIG_BR, button_state);
 
 	but_state.fan = 0;
-	button_state = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_4);
-	push_state(&fan, MASK_FAN, button_state);
+	*p_Echo_Button_Pressed = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_4);
 
 	but_state.blink_right = 0;
 	button_state = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_5);
@@ -617,27 +629,27 @@ void TIM4_IRQHandler(void)
 	}
 
 	//power calculator
-	static uint8_t count_power_button_press = 0;
+		static uint8_t count_power_button_press = 0;
 
-	if( HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_9) ) count_power_button_press++;
-	else count_power_button_press = 0;
+		if( HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_9) ) count_power_button_press++;
+		else count_power_button_press = 0;
 
-	if(count_power_button_press == 3)
-	{
-		Power_Button_Pressed = (!Power_Button_Pressed);
-		Start_Display_Power = 1;
-	}
-	if(Start_Display_Power == 1)
-	{
+		if(count_power_button_press == 3)
+		{
+			*p_Power_Button_Pressed = (!*p_Power_Button_Pressed);
+			Start_Display_Power = 1;
+		}
+		if(Start_Display_Power == 1)
+		{
 			Display_Counter++;
 			if(Display_Counter == 10)
 				{
 					Display_Counter = 10;
 					Start_Display_Power = 0;
 				}
-	}
-	else Display_Counter = 0;
-	Calul_Putere_Lap(bus_pow, Power_Button_Pressed, &Power_Sum_Print);
+		}
+		else Display_Counter = 0;
+		Calcul_Putere_Lap(p_bat_pow, p_Power_Button_Pressed, p_Power_Sum_Print);
 
 	// @formatter:on
   /* USER CODE END TIM4_IRQn 1 */

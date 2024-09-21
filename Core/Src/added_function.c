@@ -1,31 +1,21 @@
-#include"main.h"
+#include "main.h"
 
-void Calul_Putere_Lap(float bus_pow, uint8_t Power_Button_Pressed, float* Power_Sum_Print)
+void Calcul_Putere_Lap(float* bat_pow, uint8_t* p_Power_Button_Pressed, float* p_Power_Sum_Print)
 {
-	static double Power_Sum = 0;
+	static float Power_Sum = 0;
 
-	if(Power_Button_Pressed == 1)
+	if( *p_Power_Button_Pressed == 1 )
 	{
-		if( Power_Sum < 0xFFFFFFFFFFFFEC77 )
-		{
-			Power_Sum += bus_pow * 0.1;
-		}
+		Power_Sum += *bat_pow * 0.1;
 	}
 	else
 	{
-		if(Power_Sum < 0xFFFFFFFFFFFFEC77)
-		{
-				*Power_Sum_Print =  Power_Sum / 3600;
-				Power_Sum = 0;
-		}
-		else if(Power_Sum >= 0xFFFFFFFFFFFFEC77) //OVERFLOW
-		{
-			*Power_Sum_Print = 0;
-			Power_Sum = 0;
-		}
-		Power_Button_Pressed == 1;
+		*p_Power_Sum_Print = Power_Sum / 3600;
+		Power_Sum = 0;
+		*p_Power_Button_Pressed = 1;
 	}
 }
+
 
 
 

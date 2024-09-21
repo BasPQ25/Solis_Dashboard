@@ -134,7 +134,7 @@ uint8_t auxiliary_safe_state = 0;
 	uint8_t safe_state = 0;
 
 	float prev_current_ref = 0;
-	static float delta = 0.05f;
+	static float delta = 0.1f;
 
 	uint32_t bus_current_mailbox = CAN_TX_MAILBOX2;
 
@@ -142,16 +142,25 @@ uint8_t auxiliary_safe_state = 0;
 	static uint8_t bus_current_data[8];
 
 	static float bus_current_limit = 1.0f;
-	#define  MAX_CURRENT_REF  0.5f
-	#define SPEED_LIMIT  20
+
+	float MAX_CURRENT_REF = 1.0f;
+	float* p_MAX_CURRENT_REF = &MAX_CURRENT_REF;
+
+	#define MAX_CURRENT_REF_RVS 0.3f
 
 
-	extern float Power_Sum_Print;
+	#define SPEED_LIMIT  0
+	#define SPEED_LIMIT_RVS 0
 
-	float bus_pow = 0;
+	extern float* p_Power_Sum_Print;
+
+	float bat_pow = 0;
+	float *p_bat_pow = &bat_pow;
 
 	extern uint8_t Start_Display_Power;
 	extern uint8_t Display_Counter;
+
+	extern uint8_t* p_Echo_Button_Pressed;
 
 
 
@@ -189,15 +198,15 @@ void update_display(I2C_HandleTypeDef *hi2c1, char *msg)
 
 	char left_blink, right_blink;
 	char buffer[21];
-	float mppt_pow = ((float)((float)mppt1_current + (float)mppt2_current) * (float)mppt1_voltage) / 100.0F;
-	float bat_pow = ((float)bat_current * (float)bat_voltage) / 1000000.0F;
-	bus_pow = *p_bus_current * *p_bus_voltage;
+	//float mppt_pow = ((float)((float)mppt1_current + (float)mppt2_current) * (float)mppt1_voltage) / 100.0F;
+	bat_pow = ((float)bat_current * (float)bat_voltage) / 1000000.0F;
+	float bus_pow = *p_bus_current * *p_bus_voltage;
+
 
 	// Display first row
 	HD44780_SetCursor(0, 0);
 	snprintf(buffer, 21, "%4.1f |V: %4.0f | %4.2f", *p_tmp_min, (-*p_veh_spd) * 3.6, *p_vol_min);
 	HD44780_PrintStr(buffer);
-
 	// Display second row
 	HD44780_SetCursor(0, 1);
 	snprintf(buffer, 21, "%4.1f |%%: %4.0f | %4.2f", *p_tmp_max, (*p_charge) * 100.f, *p_vol_max);
@@ -205,7 +214,18 @@ void update_display(I2C_HandleTypeDef *hi2c1, char *msg)
 
 	// Display third row
 	HD44780_SetCursor(0, 2);
-	snprintf(buffer, 21, "%4.0f | %6.0f | %4.0f", mppt_pow, bat_pow, bus_pow);
+	if(*p_Echo_Button_Pressed == 0)
+	{
+		snprintf(buffer, 21, "STD    %6.0f | %4.0f",bat_pow, bus_pow);
+		*p_MAX_CURRENT_REF = 1.0f;
+		delta = 0.1f;
+	}
+	else
+	{
+		snprintf(buffer, 21, "CHILL  %6.0f | %4.0f",bat_pow, bus_pow);
+		*p_MAX_CURRENT_REF = 0.7f;
+		delta = 0.05f;
+	}
 	HD44780_PrintStr(buffer);
 
 	// Display message
@@ -218,11 +238,11 @@ void update_display(I2C_HandleTypeDef *hi2c1, char *msg)
 
 	if(Start_Display_Power == 1 && Display_Counter < 10)
 	{
-		snprintf(buffer, 13, "%c%c NEW LAP!!", left_blink, right_blink);
+		snprintf(buffer, 13, "%c%c NEW LAP  ", left_blink, right_blink);
 	}
 	else if(Display_Counter == 10 || Start_Display_Power == 0)
 	{
-		snprintf(buffer, 11, "%c%c L :%4.0f", left_blink, right_blink, Power_Sum_Print);
+		snprintf(buffer, 13, "%c%c L: %4.0f", left_blink, right_blink, *p_Power_Sum_Print);
 	}
 	HD44780_SetCursor(8, 3);
 	HD44780_PrintStr(buffer);
@@ -246,7 +266,7 @@ int main(void)
 
   /* USER CODE BEGIN 1 */
 	//Delay cum au spus baietii de pe forumuri, nu merge 100% fara
-		long j = 100000;
+		volatile int j = 100000;
 		while(--j){}
 
 	uint16_t pedal_gradient = 0;
@@ -296,6 +316,7 @@ int main(void)
 	/* Initialize */
 	HD44780_Init(4);
 
+	HD44780_SetBacklight(255);
 	// Clear screen buffer
 	HD44780_Clear();
 
@@ -314,6 +335,7 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 	while (1) {
+
 		update_display(&hi2c1, msg);
     /* USER CODE END WHILE */
 
@@ -347,7 +369,6 @@ int main(void)
 			default:
 				// Enter safe-state
 				p_inv_data[0] = 0x00;
-
 				//de resetat cand intra in eroare
 		}
 
@@ -380,7 +401,7 @@ int main(void)
 		// If CC is enabled keep previous reference current value
 		if (but_state.brake_swap) {
 			strcpy(msg, "Brk on");
-			*p_cur_ref = (float)(pedal_gradient - PEDAL_MIN) / (float)(PEDAL_MAX - PEDAL_MIN);;
+			*p_cur_ref = (float)(pedal_gradient - PEDAL_MIN) / (float)(PEDAL_MAX - PEDAL_MIN);
 			*p_mot_spd = 0.0f;
 		} else if (but_state.cruise_mode && *p_crs_spd > 100.0f) {
 			strcpy(msg, "Cr Con");
@@ -398,9 +419,9 @@ int main(void)
 							*p_cur_ref += delta;
 						}
 						else *p_cur_ref = current_ref;
-						if (*p_cur_ref > MAX_CURRENT_REF && *(p_veh_spd) * 3.6 <= SPEED_LIMIT)
+						if (*p_cur_ref > *p_MAX_CURRENT_REF)
 						{
-							*p_cur_ref = MAX_CURRENT_REF;
+							*p_cur_ref = *p_MAX_CURRENT_REF;
 						}
 						prev_current_ref = current_ref;
 						SWOC_flag = 0;
@@ -409,7 +430,22 @@ int main(void)
 				 auxiliary_safe_state = 0;
 		} else if (but_state.drv_reverse) {
 			strcpy(msg, "Dr rvs");
-			*p_cur_ref = (float)(pedal_gradient - PEDAL_MIN) / (float)(PEDAL_MAX - PEDAL_MIN);
+			//Aceeasi implementare pentru drive reverse, netestat
+			if(SWOC_flag == 1)
+			{
+				current_ref = (float)(pedal_gradient - PEDAL_MIN) / (float)(PEDAL_MAX - PEDAL_MIN);
+				if(current_ref - prev_current_ref >= delta)
+				{
+					*p_cur_ref += delta;
+				}
+				else *p_cur_ref = current_ref;
+				if (*p_cur_ref > MAX_CURRENT_REF_RVS )
+				{
+					*p_cur_ref = MAX_CURRENT_REF_RVS;
+				}
+				prev_current_ref = current_ref;
+				SWOC_flag = 0;
+			}
 			*p_mot_spd = 2000.0f;
 			 auxiliary_safe_state = 0;  // To quickly accelerate set large angular velocity reference
 		} else {
